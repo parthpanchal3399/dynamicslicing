@@ -1,14 +1,11 @@
 from typing import List, Callable, Any, Tuple, Dict
-
-import libcst as cst
 from dynapyt.analyses.BaseAnalysis import BaseAnalysis
 from dynapyt.instrument.IIDs import IIDs
-from dynapyt.utils.nodeLocator import get_node_by_location, get_parent_by_type
+from dynapyt.utils.nodeLocator import get_node_by_location
 
 from dynamicslicing import utils
 import os
 import libcst.matchers as m
-
 
 class SliceDataflow(BaseAnalysis):
 
@@ -19,7 +16,7 @@ class SliceDataflow(BaseAnalysis):
             source = file.read()
         iid_object = IIDs(source_path)
 
-        self.lines_to_keep = []  # TODO: Make these sets so that it has unique values only?
+        self.lines_to_keep = []
         self.target_variables = []
         self.slicing_line = -1
         self.class_def_lines = []
@@ -42,42 +39,48 @@ class SliceDataflow(BaseAnalysis):
     def write(self, dyn_ast: str, iid: int, old_vals: List[Callable], new_val: Any) -> Any:
         location = self.iid_to_location(dyn_ast, iid)
         node = get_node_by_location(self._get_ast(dyn_ast)[0], location)
-
         if location.start_line <= self.slicing_line and location.start_line not in self.class_def_lines:
             if location.start_line in self.datastore:
-                if isinstance(node, cst.Assign):
-                    if isinstance(node.targets[0].target, cst.Attribute): # to handle obj access eg. p2.name
-                        self.datastore[location.start_line]["write"] = f"{node.targets[0].target.value.value}.{node.targets[0].target.attr.value}"
+                if m.matches(node, m.Assign()):
+                    if m.matches(node.targets[0].target, m.Attribute()):  # to handle obj access eg. p2.name
+                        self.datastore[location.start_line][
+                            "write"] = f"{node.targets[0].target.value.value}.{node.targets[0].target.attr.value}"
                     else:
-                        self.datastore[location.start_line]["write"] = node.targets[0].target.value
-                if isinstance(node, cst.AugAssign):
+                        if m.matches(node.targets[0].target,
+                                     m.Subscript()):  # to handle ages[2] = 23 ie subscript as target
+                            self.datastore[location.start_line]["write"] = node.targets[0].target.value.value
+                        else:  # to handle y = 2
+                            self.datastore[location.start_line]["write"] = node.targets[0].target.value
+                elif m.matches(node, m.AugAssign()):  # to handle y += 2
                     self.datastore[location.start_line]["write"] = node.target.value
             else:
-                if isinstance(node, cst.Assign):
-                    if isinstance(node.targets[0].target, cst.Attribute): # to handle obj access eg. p2.name
-                        self.datastore[location.start_line] = {"read": [], "write": f"{node.targets[0].target.value.value}.{node.targets[0].target.attr.value}"}
+                if m.matches(node, m.Assign()):
+                    if m.matches(node.targets[0].target, m.Attribute()):  # to handle obj access eg. p2.name
+                        self.datastore[location.start_line] = {"read": [],
+                                                               "write": f"{node.targets[0].target.value.value}.{node.targets[0].target.attr.value}"}
                     else:
-                        if isinstance(node.targets[0].target.value, cst.Name):
-                            self.datastore[location.start_line] = {"read": [], "write": node.targets[0].target.value.value}
-                        else:
+                        if m.matches(node.targets[0].target,
+                                     m.Subscript()):  # to handle ages[2] = 23 ie subscript as target
+                            self.datastore[location.start_line] = {"read": [],
+                                                                   "write": node.targets[0].target.value.value}
+                        else:  # to handle y = 2
                             self.datastore[location.start_line] = {"read": [], "write": node.targets[0].target.value}
-
-                if isinstance(node, cst.AugAssign):
+                elif m.matches(node, m.AugAssign()):  # to handle y += 2
                     self.datastore[location.start_line] = {"read": [], "write": node.target.value}
 
     def read(self, dyn_ast: str, iid: int, val: Any) -> Any:
         location = self.iid_to_location(dyn_ast, iid)
         node = get_node_by_location(self._get_ast(dyn_ast)[0], location)
-
-        if location.start_line <= self.slicing_line and location.start_line not in self.class_def_lines and not isinstance(node, cst.Subscript):
+        if location.start_line <= self.slicing_line and location.start_line not in self.class_def_lines and not m.matches(node, m.Subscript()):
             if location.start_line in self.datastore:
-                if isinstance(node, cst.Attribute): # To handle object access eg: p.name
+                if m.matches(node, m.Attribute()):  # to handle object access eg: p.name
                     self.datastore[location.start_line]["read"].append(f"{node.value.value}.{node.attr.value}")
                 else:
                     self.datastore[location.start_line]["read"].append(node.value)
             else:
-                if isinstance(node, cst.Attribute):  # To handle object access eg: p.name
-                    self.datastore[location.start_line] = {"read": [f"{node.value.value}.{node.attr.value}"], "write": ""}
+                if m.matches(node, m.Attribute()):  # To handle object access eg: p.name
+                    self.datastore[location.start_line] = {"read": [f"{node.value.value}.{node.attr.value}"],
+                                                           "write": ""}
                 else:
                     self.datastore[location.start_line] = {"read": [node.value], "write": ""}
 
@@ -85,16 +88,24 @@ class SliceDataflow(BaseAnalysis):
         location = self.iid_to_location(dyn_ast, iid)
         node = get_node_by_location(self._get_ast(dyn_ast)[0], location)
         if location.start_line <= self.slicing_line and location.start_line not in self.class_def_lines:
-            # for normal function calls eg. a.append()
-            if isinstance(node.args[0].value.value, str) and not isinstance(node.func.value, str):
-                self.datastore[location.start_line] = {"read": [node.args[0].value.value], "write": node.func.value.value}
-                # TODO: Insert all positional parameters into "read"
-
-            # TODO: Is this the most generalized way to handle Constructor calls/Calls without objects?
-            # node.func.value --> constructor/calls without objects eg Person(), HelloWorld()
-            # node.func.value.value --> normal function eg. a.append(), p.HelloWorld()
-
-
+            if location.start_line in self.datastore:
+                if m.matches(node.func, m.Attribute()):  # to handle normal function calls eg. a.append(), obj.funct()
+                    for arg in node.args:   # to handle all positional arguments
+                        if m.matches(arg.value, m.Attribute()):   # to handle l.append(p.name)
+                            self.datastore[location.start_line]["read"].append(f"{arg.value.value.value}.{arg.value.attr.value}")
+                            if not self.datastore[location.start_line]["write"]:
+                                self.datastore[location.start_line]["write"] = node.func.value.value
+                        elif m.matches(arg.value, m.Name()):  # to handle normal args (func(12), func(x))
+                            self.datastore[location.start_line]["read"].append(arg.value.value)
+                            if not self.datastore[location.start_line]["write"]:
+                                self.datastore[location.start_line]["write"] = node.func.value.value
+            else:
+                if m.matches(node.func, m.Attribute()):  # to handle normal function calls eg. a.append(), obj.funct()
+                    for arg in node.args:  # to handle all positional arguments
+                        if m.matches(arg.value, m.Attribute()):  # to handle l.append(p.name)
+                            self.datastore[location.start_line] = {"read": f"{arg.value.value.value}.{arg.value.attr.value}", "write": node.func.value.value}
+                        elif m.matches(arg.value, m.Name()):  # to handle normal args (func(12), func(x))
+                            self.datastore[location.start_line] = {"read": arg.value.value, "write": node.func.value.value}
 
     def end_execution(self) -> None:
         with open(os.path.splitext(self.source_path)[0] + '.py.orig', "r") as file:
@@ -107,9 +118,10 @@ class SliceDataflow(BaseAnalysis):
         for line, val in self.datastore.items():
             # print(self.target_variables)
             # print(line, val)
-            if val["write"] in self.target_variables or ("." in val["write"] and val["write"][:val["write"].index(".")] in self.target_variables):
+            if val["write"] in self.target_variables or (
+                    "." in val["write"] and val["write"][:val["write"].index(".")] in self.target_variables):
                 self.lines_to_keep.append(line)
-                if len(val["read"]) > 0 and not (any(x in val["read"] for x in self.target_variables)):
+                if len(val["read"]) > 0 and len([x for x in val["read"] if x not in self.target_variables]) > 0:
                     self.target_variables.extend(val["read"])
 
         sliced = utils.remove_lines(source, self.lines_to_keep)
