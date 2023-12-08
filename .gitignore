@@ -6,6 +6,7 @@
 # virtualenv
 .venv
 venv/
+venv2/
 ENV/
 
 # Installer logs
@@ -49,3 +50,5 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+/tests/.pytest_cache/
+/.pytest_cache/

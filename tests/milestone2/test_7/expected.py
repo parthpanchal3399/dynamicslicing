@@ -4,6 +4,6 @@ class Person:
             
 def slice_me():
     p = Person('Nobody')
-    return p.name # slicing criterion
+    return p.name  # slicing criterion
 
 slice_me()

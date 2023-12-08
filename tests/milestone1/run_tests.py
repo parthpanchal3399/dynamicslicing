@@ -23,6 +23,7 @@ def correct_output(expected: str, actual: str) -> bool:
 current_dir = dirname(realpath(__file__))
 start_dir = current_dir
 
+out_str = ""
 for root, dirs, files in walk(start_dir):
     if all([f in files for f in ["program.py", "expected.py", "lines.py"]]):
         program_file = join(root, "program.py")
@@ -43,7 +44,11 @@ for root, dirs, files in walk(start_dir):
 
         rel_dir = root[len(current_dir) + len(sep):]
         if not correct_output(expected, actual):
-            print(
-                f"Output of {rel_dir} does not match expected output.\n--> Expected:\n{expected}\n--> Actual:\n{actual}")
+            # print(f"Output of {rel_dir} does not match expected output.\n--> Expected:\n{expected}\n--> Actual:\n{actual}")
+            out_str += f"Output of {rel_dir} does not match expected output.\n--> Expected:\n{expected}\n--> Actual:\n{actual}"
         else:
-            print(f"{rel_dir} Passed!!")
+            # print(f"{rel_dir} Passed!!")
+            out_str += f"{rel_dir} Passed!!"
+        out_str += "\n"
+
+print(out_str)
