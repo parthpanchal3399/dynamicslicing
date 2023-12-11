@@ -1,0 +1,19 @@
+def slice_me():
+    c1 = Car(150)
+    c1.maxSpeed = 200
+    c1.accelerate(200)  # slicing criterion
+
+
+class Car:
+    def __init__(self, maxSpeed):
+        self.maxSpeed = maxSpeed
+        self.speed = 0
+
+    def accelerate(self, maxSpeed):
+        print("Accelerating...")
+        self.speed += 10
+        if self.speed > self.maxSpeed:
+            print("Stop!")
+
+
+slice_me()

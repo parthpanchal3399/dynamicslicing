@@ -118,6 +118,7 @@ class SliceDataflow(BaseAnalysis):
         for line, val in self.datastore.items():
             # print(self.target_variables)
             # print(line, val)
+            # TODO: Handle overwrite of variables
             if val["write"] in self.target_variables or (
                     "." in val["write"] and val["write"][:val["write"].index(".")] in self.target_variables):
                 self.lines_to_keep.append(line)
