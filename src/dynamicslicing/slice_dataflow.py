@@ -7,6 +7,7 @@ from dynamicslicing import utils
 import os
 import libcst.matchers as m
 
+
 class SliceDataflow(BaseAnalysis):
 
     def __init__(self, source_path):
@@ -50,6 +51,7 @@ class SliceDataflow(BaseAnalysis):
                                      m.Subscript()):  # to handle ages[2] = 23 ie subscript as target
                             self.datastore[location.start_line]["write"] = node.targets[0].target.value.value
                         else:  # to handle y = 2
+                            self.check_overwritten(node, self.datastore)  # check if value is overwritten
                             self.datastore[location.start_line]["write"] = node.targets[0].target.value
                 elif m.matches(node, m.AugAssign()):  # to handle y += 2
                     self.datastore[location.start_line]["write"] = node.target.value
@@ -64,14 +66,18 @@ class SliceDataflow(BaseAnalysis):
                             self.datastore[location.start_line] = {"read": [],
                                                                    "write": node.targets[0].target.value.value}
                         else:  # to handle y = 2
+                            print(node)
+                            self.check_overwritten(node, self.datastore)  # check if value is overwritten
                             self.datastore[location.start_line] = {"read": [], "write": node.targets[0].target.value}
+
                 elif m.matches(node, m.AugAssign()):  # to handle y += 2
                     self.datastore[location.start_line] = {"read": [], "write": node.target.value}
 
     def read(self, dyn_ast: str, iid: int, val: Any) -> Any:
         location = self.iid_to_location(dyn_ast, iid)
         node = get_node_by_location(self._get_ast(dyn_ast)[0], location)
-        if location.start_line <= self.slicing_line and location.start_line not in self.class_def_lines and not m.matches(node, m.Subscript()):
+        if location.start_line <= self.slicing_line and location.start_line not in self.class_def_lines and not m.matches(
+                node, m.Subscript()):
             if location.start_line in self.datastore:
                 if m.matches(node, m.Attribute()):  # to handle object access eg: p.name
                     self.datastore[location.start_line]["read"].append(f"{node.value.value}.{node.attr.value}")
@@ -90,9 +96,10 @@ class SliceDataflow(BaseAnalysis):
         if location.start_line <= self.slicing_line and location.start_line not in self.class_def_lines:
             if location.start_line in self.datastore:
                 if m.matches(node.func, m.Attribute()):  # to handle normal function calls eg. a.append(), obj.funct()
-                    for arg in node.args:   # to handle all positional arguments
-                        if m.matches(arg.value, m.Attribute()):   # to handle l.append(p.name)
-                            self.datastore[location.start_line]["read"].append(f"{arg.value.value.value}.{arg.value.attr.value}")
+                    for arg in node.args:  # to handle all positional arguments
+                        if m.matches(arg.value, m.Attribute()):  # to handle l.append(p.name)
+                            self.datastore[location.start_line]["read"].append(
+                                f"{arg.value.value.value}.{arg.value.attr.value}")
                             if not self.datastore[location.start_line]["write"]:
                                 self.datastore[location.start_line]["write"] = node.func.value.value
                         elif m.matches(arg.value, m.Name()):  # to handle normal args (func(12), func(x))
@@ -103,9 +110,12 @@ class SliceDataflow(BaseAnalysis):
                 if m.matches(node.func, m.Attribute()):  # to handle normal function calls eg. a.append(), obj.funct()
                     for arg in node.args:  # to handle all positional arguments
                         if m.matches(arg.value, m.Attribute()):  # to handle l.append(p.name)
-                            self.datastore[location.start_line] = {"read": f"{arg.value.value.value}.{arg.value.attr.value}", "write": node.func.value.value}
+                            self.datastore[location.start_line] = {
+                                "read": f"{arg.value.value.value}.{arg.value.attr.value}",
+                                "write": node.func.value.value}
                         elif m.matches(arg.value, m.Name()):  # to handle normal args (func(12), func(x))
-                            self.datastore[location.start_line] = {"read": arg.value.value, "write": node.func.value.value}
+                            self.datastore[location.start_line] = {"read": arg.value.value,
+                                                                   "write": node.func.value.value}
 
     def end_execution(self) -> None:
         with open(os.path.splitext(self.source_path)[0] + '.py.orig', "r") as file:
@@ -113,7 +123,7 @@ class SliceDataflow(BaseAnalysis):
 
         self.datastore = dict(sorted(self.datastore.items(), reverse=True))
         self.lines_to_keep = self.lines_to_keep + self.class_def_lines
-        # print(self.datastore)
+        print(self.datastore)
 
         for line, val in self.datastore.items():
             # print(self.target_variables)
@@ -128,3 +138,9 @@ class SliceDataflow(BaseAnalysis):
         sliced = utils.remove_lines(source, self.lines_to_keep)
         with open(os.path.dirname(self.source_path) + '\\sliced.py', "w") as updated_file:
             updated_file.write(sliced)
+
+    def check_overwritten(self, node, datastore):
+        if m.matches(node, m.Assign(value=m.Integer() | m.Float() | m.Imaginary() | m.SimpleString() | m.FormattedString() | m.ConcatenatedString())):
+            for line, val in list(self.datastore.items()):
+                if node.targets[0].target.value == val["write"]:
+                    self.datastore.pop(line, None)  # value of the variable is overwritten, remove from datastore
