@@ -31,9 +31,7 @@ def test_runner(directory_pair: Tuple[str, str], capsys):
 
     # gather hooks used by the analysis
     module_prefix = rel_dir.replace(sep, ".")
-    if module_prefix.startswith("milestone1"):
-        return
-    elif module_prefix.startswith("milestone2"):
+    if module_prefix.startswith("milestone2"):
         module_name = "dynamicslicing.slice_dataflow"
     elif module_prefix.startswith("milestone3"):
         module_name = "dynamicslicing.slice"
@@ -55,10 +53,11 @@ def test_runner(directory_pair: Tuple[str, str], capsys):
                 pytest.fail(f"Could find only the instrumented program in {rel_dir}")
             copyfile(orig_program_file, program_file)
 
-    analysis_instances = [class_[1](program_file) for class_ in analysis_classes]
-    selected_hooks = get_hooks_from_analysis(analysis_instances)
+    selected_hooks = get_hooks_from_analysis([f"{module_name}.{ac[0]}:{program_file}" for ac in analysis_classes])
+
     instrument_file(program_file, selected_hooks)
 
+    analysis_instances = [class_[1](orig_program_file) for class_ in analysis_classes]
 
     # analyze
     _rt.analyses = None
