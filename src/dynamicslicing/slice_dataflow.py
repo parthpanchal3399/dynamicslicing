@@ -8,6 +8,7 @@ import os
 import libcst.matchers as m
 
 
+
 class SliceDataflow(BaseAnalysis):
 
     def __init__(self, source_path):
@@ -54,6 +55,10 @@ class SliceDataflow(BaseAnalysis):
                         else:  # to handle y = 2
                             self.check_overwritten(node)  # check if value is overwritten
                             self.datastore[location.start_line]["write"] = node.targets[0].target.value
+                            if m.matches(node, m.Assign(value=m.Name())) and not m.matches(node, m.Assign(value=m.Call())):   # to handle obj aliases p2 = p1
+                                if node.value.value in self.target_variables:
+                                    self.target_variables.append(node.targets[0].target.value)
+
                 elif m.matches(node, m.AugAssign()):  # to handle y += 2
                     self.datastore[location.start_line]["write"] = node.target.value
             else:
@@ -70,6 +75,8 @@ class SliceDataflow(BaseAnalysis):
                         else:  # to handle y = 2
                             self.check_overwritten(node)  # check if value is overwritten
                             self.datastore[location.start_line] = {"read": [], "write": node.targets[0].target.value}
+
+                            # TODO: add obj alias code p2 = p1 ?
 
                 elif m.matches(node, m.AugAssign()):  # to handle y += 2
                     self.datastore[location.start_line] = {"read": [], "write": node.target.value}
@@ -97,16 +104,18 @@ class SliceDataflow(BaseAnalysis):
         if location.start_line <= self.slicing_line and location.start_line not in self.class_def_lines:
             if location.start_line in self.datastore:
                 if m.matches(node.func, m.Attribute()):  # to handle normal function calls eg. a.append(), obj.funct()
+                    if not self.datastore[location.start_line]["write"]:    # put object into write
+                        self.datastore[location.start_line]["write"] = node.func.value.value
                     for arg in node.args:  # to handle all positional arguments
                         if m.matches(arg.value, m.Attribute()):  # to handle l.append(p.name)
                             self.datastore[location.start_line]["read"].append(
                                 f"{arg.value.value.value}.{arg.value.attr.value}")
-                            if not self.datastore[location.start_line]["write"]:
-                                self.datastore[location.start_line]["write"] = node.func.value.value
+
                         elif m.matches(arg.value, m.Name()):  # to handle normal args (func(12), func(x))
                             self.datastore[location.start_line]["read"].append(arg.value.value)
-                            if not self.datastore[location.start_line]["write"]:
-                                self.datastore[location.start_line]["write"] = node.func.value.value
+
+
+
             else:
                 if m.matches(node.func, m.Attribute()):  # to handle normal function calls eg. a.append(), obj.funct()
                     for arg in node.args:  # to handle all positional arguments
@@ -125,11 +134,13 @@ class SliceDataflow(BaseAnalysis):
         self.datastore = dict(sorted(self.datastore.items(), reverse=True))
         self.lines_to_keep = self.lines_to_keep + self.class_def_lines
         # print(self.datastore)
+        # print(self.target_variables)
 
         for line, val in self.datastore.items():
             # print(self.target_variables)
             # print(line, val)
-            if val["write"] in self.target_variables or ("." in val["write"] and val["write"][:val["write"].index(".")] in self.target_variables):
+            if val["write"] in self.target_variables or (
+                    "." in val["write"] and val["write"][:val["write"].index(".")] in self.target_variables):
                 self.lines_to_keep.append(line)
                 if len(val["read"]) > 0 and len([x for x in val["read"] if x not in self.target_variables]) > 0:
                     self.target_variables.extend(val["read"])
@@ -139,8 +150,10 @@ class SliceDataflow(BaseAnalysis):
             updated_file.write(sliced)
 
     def check_overwritten(self, node):
-        if m.matches(node, m.Assign(value=m.Integer() | m.Float() | m.Imaginary() | m.SimpleString() | m.FormattedString() | m.ConcatenatedString())):
+        if m.matches(node, m.Assign(
+                value=m.Integer() | m.Float() | m.Imaginary() | m.SimpleString() | m.FormattedString() | m.ConcatenatedString())):
             for line, val in list(self.datastore.items()):
                 if node.targets[0].target.value == val["write"]:
                     self.datastore.pop(line, None)  # value of the variable is overwritten, remove from datastore
+
 
