@@ -62,6 +62,7 @@ class MyVisitor(CSTVisitor):
             # extract target variable in the slicing criterion
             trailing_whitespace = self.get_metadata(ParentNodeProvider, original_node)
             next_parent = self.get_metadata(ParentNodeProvider, trailing_whitespace).body[0]
+
             if m.matches(next_parent, m.Return()):
                 if m.matches(next_parent.value, m.Name()):  # to handle return x
                     self.return_vals[1].append(next_parent.value.value)
@@ -76,7 +77,10 @@ class MyVisitor(CSTVisitor):
                     self.return_vals[1].append(next_parent.value.left.value)
                     self.return_vals[1].append(next_parent.value.right.value)
                 elif m.matches(next_parent.targets[0], m.AssignTarget()):
-                    if m.matches(next_parent.targets[0].target, m.Subscript()):   # to handle a[2] = 100
+                    if m.matches(next_parent.value, m.Name()):  # to handle result = arr; both obj will be in target
+                        self.return_vals[1].append(next_parent.targets[0].target.value)
+                        self.return_vals[1].append(next_parent.value.value)
+                    elif m.matches(next_parent.targets[0].target, m.Subscript()):   # to handle a[2] = 100
                         self.return_vals[1].append(next_parent.targets[0].target.value.value)
                     else:   # to handle a = Hello()
                         self.return_vals[1].append(next_parent.targets[0].target.value)
@@ -86,7 +90,7 @@ class MyVisitor(CSTVisitor):
                         self.return_vals[1].append(arg.value.value)
                 elif m.matches(next_parent.value, m.Call(func=m.Attribute())):    # to handle p1.funct()
                     self.return_vals[1].append(next_parent.value.func.value.value)
-
+            # print(self.return_vals[1])
             # TODO: Add more cases of slicing criterion
 
     def leave_FunctionDef(self, original_node: "FunctionDef") -> None:
