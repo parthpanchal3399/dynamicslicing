@@ -223,7 +223,7 @@ class Slice(BaseAnalysis):
 
 
         sliced = utils.remove_lines(source, self.lines_to_keep)
-        with open(os.path.dirname(self.source_path) + '\\sliced.py', "w") as updated_file:
+        with open(os.path.dirname(self.source_path) + '/sliced.py', "w") as updated_file:
             updated_file.write(sliced)
 
     def check_overwritten(self, node):
