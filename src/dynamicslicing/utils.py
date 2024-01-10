@@ -74,8 +74,10 @@ class MyVisitor(CSTVisitor):
                     self.return_vals[1].append(next_parent.value.right.value)
             elif m.matches(next_parent, m.Assign()):
                 if m.matches(next_parent, m.Assign(value=m.BinaryOperation())):  # to handle x + y
-                    self.return_vals[1].append(next_parent.value.left.value)
-                    self.return_vals[1].append(next_parent.value.right.value)
+                    if m.matches(next_parent.value.left, m.Name()):
+                        self.return_vals[1].append(next_parent.value.left.value)
+                    if m.matches(next_parent.value.right, m.Name()):
+                        self.return_vals[1].append(next_parent.value.right.value)
                 elif m.matches(next_parent.targets[0], m.AssignTarget()):
                     if m.matches(next_parent.value, m.Name()):  # to handle result = arr; both obj will be in target
                         self.return_vals[1].append(next_parent.targets[0].target.value)

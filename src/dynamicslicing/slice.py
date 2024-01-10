@@ -18,6 +18,7 @@ class Slice(BaseAnalysis):
         self.slicing_line = -1
         self.class_def_lines = []
         self.datastore = dict()  # to store line numbers, variable reads and writes
+        self.aliases = dict()   # to store alias variables with line number
         self.code = ""
 
     def begin_execution(self) -> None:
@@ -46,17 +47,14 @@ class Slice(BaseAnalysis):
                         self.datastore[location.start_line][
                             "write"] = f"{node.targets[0].target.value.value}.{node.targets[0].target.attr.value}"
                     else:
-                        if m.matches(node.targets[0].target,
-                                     m.Subscript()):  # to handle ages[2] = 23 ie subscript as target
+                        if m.matches(node.targets[0].target, m.Subscript()):  # to handle ages[2] = 23 ie subscript as target
                             self.check_overwritten(node)  # check if value is overwritten
                             self.datastore[location.start_line]["write"] = node.targets[0].target.value.value
                         else:  # to handle y = 2
                             self.check_overwritten(node)  # check if value is overwritten
                             self.datastore[location.start_line]["write"] = node.targets[0].target.value
-                            if m.matches(node, m.Assign(value=m.Name())) and not m.matches(node, m.Assign(
-                                    value=m.Call())):  # to handle obj aliases p2 = p1
-                                if node.value.value in self.target_variables:
-                                    self.target_variables.append(node.targets[0].target.value)
+                            if m.matches(node, m.Assign(value=m.Name())) and not m.matches(node, m.Assign(value=m.Call())):  # to handle obj aliases p2 = p1
+                                self.aliases[node.targets[0].target.value] = [node.value.value, location.start_line]
 
                 elif m.matches(node, m.AugAssign()):  # to handle y += 2
                     if m.matches(node.target, m.Subscript()):  # to handle ages[-1] += 50
@@ -188,18 +186,31 @@ class Slice(BaseAnalysis):
         self.datastore = dict(sorted(self.datastore.items(), reverse=True))
         self.lines_to_keep = self.lines_to_keep + self.class_def_lines
         # print(self.datastore)
+        # print(self.aliases)
         # print(self.target_variables)
 
         for line, val in self.datastore.items():
             # print(self.target_variables)
             # print(line, val)
-
             if line <= self.slicing_line:
                 # DATA-FLOW
-                if not val.get("is_cond") and val["write"] in self.target_variables or (
-                        "." in val["write"] and val["write"][:val["write"].index(".")] in self.target_variables):
+                if (not val.get("is_cond")
+                        and val["write"] in self.target_variables
+                        or ("." in val["write"] and val["write"][:val["write"].index(".")] in self.target_variables)):
                     self.lines_to_keep.append(line)
                     if len(val["read"]) > 0 and len([x for x in val["read"] if x not in self.target_variables]) > 0:
+                        self.target_variables.extend(val["read"])
+
+                # DATA-FLOW : for aliases
+                if (not val.get("is_cond")
+                        and ("." in val["write"] and val["write"][:val["write"].index(".")] in list(self.aliases.keys()))
+                        or (val["write"] in list(self.aliases.keys()) and any(val["write"]+"." in r for r in val["read"]))):
+                    left = val["write"][:val["write"].index(".")] if "." in val["write"] else val["write"]
+                    right = self.aliases[left][0]
+                    loc = self.aliases[left][1]
+                    if right in self.target_variables:
+                        self.lines_to_keep.append(line)
+                        self.lines_to_keep.append(loc)
                         self.target_variables.extend(val["read"])
 
                 # CONTROL-FLOW
@@ -227,8 +238,7 @@ class Slice(BaseAnalysis):
             updated_file.write(sliced)
 
     def check_overwritten(self, node):
-        if m.matches(node, m.Assign(
-                value=m.Integer() | m.Float() | m.Imaginary() | m.SimpleString() | m.FormattedString() | m.ConcatenatedString())):
+        if m.matches(node, m.Assign(value=m.Integer() | m.Float() | m.Imaginary() | m.SimpleString() | m.FormattedString() | m.ConcatenatedString())):
             for line, val in list(self.datastore.items()):
                 if node.targets[0].target.value == val["write"]:
                     self.datastore.pop(line, None)  # value of the variable is overwritten, remove from datastore

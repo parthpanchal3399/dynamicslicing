@@ -23,6 +23,8 @@ class SliceDataflow(BaseAnalysis):
         self.slicing_line = -1
         self.class_def_lines = []
         self.datastore = dict()  # to store line numbers, variable reads and writes
+        self.aliases = dict()   # to store alias variables with line number
+
 
     def begin_execution(self) -> None:
         with open(os.path.splitext(self.source_path)[0] + '.py.orig', "r") as file:
@@ -56,8 +58,8 @@ class SliceDataflow(BaseAnalysis):
                             self.check_overwritten(node)  # check if value is overwritten
                             self.datastore[location.start_line]["write"] = node.targets[0].target.value
                             if m.matches(node, m.Assign(value=m.Name())) and not m.matches(node, m.Assign(value=m.Call())):   # to handle obj aliases p2 = p1
-                                if node.value.value in self.target_variables:
-                                    self.target_variables.append(node.targets[0].target.value)
+                                self.aliases[node.targets[0].target.value] = [node.value.value, location.start_line]
+
 
                 elif m.matches(node, m.AugAssign()):  # to handle y += 2
                     self.datastore[location.start_line]["write"] = node.target.value
@@ -143,6 +145,19 @@ class SliceDataflow(BaseAnalysis):
                     "." in val["write"] and val["write"][:val["write"].index(".")] in self.target_variables):
                 self.lines_to_keep.append(line)
                 if len(val["read"]) > 0 and len([x for x in val["read"] if x not in self.target_variables]) > 0:
+                    self.target_variables.extend(val["read"])
+
+            # DATA-FLOW : for aliases
+            if (not val.get("is_cond")
+                    and ("." in val["write"] and val["write"][:val["write"].index(".")] in list(self.aliases.keys()))
+                    or (val["write"] in list(self.aliases.keys()) and any(
+                        val["write"] + "." in r for r in val["read"]))):
+                left = val["write"][:val["write"].index(".")] if "." in val["write"] else val["write"]
+                right = self.aliases[left][0]
+                loc = self.aliases[left][1]
+                if right in self.target_variables:
+                    self.lines_to_keep.append(line)
+                    self.lines_to_keep.append(loc)
                     self.target_variables.extend(val["read"])
 
         sliced = utils.remove_lines(source, self.lines_to_keep)
