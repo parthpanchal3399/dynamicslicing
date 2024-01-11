@@ -117,6 +117,9 @@ class Slice(BaseAnalysis):
 
                         elif m.matches(arg.value, m.Name()):  # to handle normal args (func(12), func(x))
                             self.datastore[location.start_line]["read"].add(arg.value.value)
+                elif m.matches(node.func, m.Name()):    # to handle function calls without objects
+                    if self.datastore[location.start_line]["write"] == "":
+                        self.datastore[location.start_line]["write"] = "_FN_"
 
             else:
                 if m.matches(node.func, m.Attribute()):  # to handle normal function calls eg. a.append(), obj.funct()
@@ -128,11 +131,11 @@ class Slice(BaseAnalysis):
                         elif m.matches(arg.value, m.Name()):  # to handle normal args (func(12), func(x))
                             self.datastore[location.start_line] = {"read": {arg.value.value},
                                                                    "write": node.func.value.value}
-                elif m.matches(node.func, m.Name()):
+                elif m.matches(node.func, m.Name()):    # to handle function calls without objects
+                    self.datastore[location.start_line] = {"read": set(), "write": '_FN_'}
                     if node.func.value == "print":  # to handle just print("string")
-                        if m.matches(node.args[0].value,
-                                     m.SimpleString()):  # TODO: add logic to handle multiple string args
-                            self.datastore[location.start_line] = {"read": set(), "write": ''}
+                        if m.matches(node.args[0].value, m.SimpleString()):  # TODO: add logic to handle multiple string args
+                            self.datastore[location.start_line] = {"read": set(), "write": '_FN_'}
 
     def enter_if(self, dyn_ast: str, iid: int, cond_value: bool) -> Optional[bool]:
         location = self.iid_to_location(dyn_ast, iid)
@@ -140,11 +143,7 @@ class Slice(BaseAnalysis):
         # print("entering if:", location.start_line)
         if cond_value:
             self.datastore[location.start_line]["is_cond"] = True
-            count = 0
-            if m.matches(node.orelse, m.Else()):
-                count = str(node.orelse).count("SimpleStatementLine")
-            else:
-                count = str(node.body).count("SimpleStatementLine")
+            count = str(node.body).count("SimpleStatementLine")
             self.datastore[location.start_line]["body"] = list(
                 range(location.start_line + 1, location.start_line + 1 + count))
         else:
@@ -193,7 +192,6 @@ class Slice(BaseAnalysis):
             # print(self.target_variables)
             # print(line, val)
             if line <= self.slicing_line:
-                # DATA-FLOW
                 if (not val.get("is_cond")
                         and val["write"] in self.target_variables
                         or ("." in val["write"] and val["write"][:val["write"].index(".")] in self.target_variables)):
@@ -215,13 +213,20 @@ class Slice(BaseAnalysis):
 
                 # CONTROL-FLOW
                 if val.get("is_cond") == True:
-                    for body_line in val["body"]:
+                    for body_line in reversed(val["body"]):
                         if self.datastore.get(body_line) and body_line <= self.slicing_line:
-                            if self.datastore.get(body_line)["write"] in self.target_variables or ("." in self.datastore.get(body_line)["write"] and self.datastore.get(body_line)["write"][:self.datastore.get(body_line)["write"].index(".")] in self.target_variables):
+                            if ((self.datastore.get(body_line)["write"] in self.target_variables)
+                                    or ("." in self.datastore.get(body_line)["write"] and self.datastore.get(body_line)["write"][:self.datastore.get(body_line)["write"].index(".")] in self.target_variables)
+                                    or (self.datastore.get(body_line)["write"] == "_FN_" and len(self.datastore.get(body_line)["read"].intersection(set(self.target_variables))) > 0)):
                                 self.lines_to_keep.append(body_line)
                                 self.lines_to_keep.append(line)
                                 if len(val["read"]) > 0 and len([x for x in val["read"] if x not in self.target_variables]) > 0:
                                     self.target_variables.extend(val["read"])
+
+                                if self.datastore.get(body_line)["write"] == "_FN_" and len(self.datastore.get(body_line)["read"].intersection(set(self.target_variables))) > 0:
+                                    self.target_variables.extend(self.datastore.get(body_line)["read"])
+
+
 
                         if body_line in self.lines_to_keep:  # if the body of conditional is to be kept, then the conditional line should also be kept
                             self.lines_to_keep.append(line)

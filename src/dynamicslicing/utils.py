@@ -126,23 +126,28 @@ class RemoveLinesTransformer(CSTTransformer):
         PositionProvider,
     )
 
-    def leave_If(self, original_node: "If", updated_node: "If") -> Union["BaseStatement", FlattenSentinel["BaseStatement"], RemovalSentinel]:
+    def leave_If(self, original_node: "If", updated_node: "If") -> Union["BaseStatement", FlattenSentinel["BaseStatement"], RemovalSentinel]: # to handle if and elif
         location = self.get_metadata(PositionProvider, original_node)
-        if location.start.line not in self.lines_to_keep: # TODO: check for elif
-            if not m.matches(original_node, m.If(orelse=m.Else())):  # just if no else #
+        # print(location.start.line)
+        # print(original_node)
+        if location.start.line not in self.lines_to_keep:
+            if not m.matches(original_node, m.If(orelse=m.Else() | m.If())):  # to handle just if no else
                 updated_node = cst.RemoveFromParent()
+            elif m.matches(original_node, m.If(orelse=m.If())):  # to handle elif
+                original_node = original_node.orelse
             elif self.else_removed == True:
                 updated_node = cst.RemoveFromParent()
                 self.else_removed = False
         return updated_node
 
-    def leave_Else(self, original_node: "Else", updated_node: "Else") -> RemovalSentinel | Else:
+    def leave_Else(self, original_node: "Else", updated_node: "Else") -> RemovalSentinel | Else:    # to handle else
         location = self.get_metadata(PositionProvider, original_node)
         # print("here: ", location.start.line)
         if location.start.line not in self.lines_to_keep:
             updated_node = cst.RemoveFromParent()
             self.else_removed = True
         return updated_node
+
 
     def leave_For(self, original_node: "For", updated_node: "For") -> Union[
         "BaseStatement", FlattenSentinel["BaseStatement"], RemovalSentinel]:
