@@ -155,10 +155,23 @@ class Slice(BaseAnalysis):
 
             if m.matches(node.orelse, m.Else()):
                 count = str(node.orelse).count("SimpleStatementLine")
-                if location.end_line - 1 not in self.datastore:
-                    self.datastore[location.end_line - 1] = {"read": {node.test.left.value}, "write": '',
-                                                             "is_cond": True, "body": list(
-                            range(location.end_line, location.end_line + count))}
+                if location.end_line - count not in self.datastore:
+                    if not m.matches(node.test.left, m.Attribute()):    # to handle normal variables
+                        if count > 1:
+                            self.datastore[location.end_line - count] = {"read": {node.test.left.value}, "write": '',
+                                                                 "is_cond": True, "body": list(range(location.end_line - count + 1, location.end_line + count - 1))}
+                        else:
+                            self.datastore[location.end_line - count] = {"read": {node.test.left.value}, "write": '',
+                                                                     "is_cond": True, "body": list(
+                                    range(location.end_line, location.end_line + count))}
+                    else:   # to handle objects eg p.age
+                        if count > 1:
+                            self.datastore[location.end_line - count] = {"read": {node.test.left.value.value}, "write": '',
+                                                                 "is_cond": True, "body": list(range(location.end_line - count + 1, location.end_line + count - 1))}
+                        else:
+                            self.datastore[location.end_line - count] = {"read": {node.test.left.value.value}, "write": '',
+                                                                         "is_cond": True, "body": list(
+                                    range(location.end_line, location.end_line + count))}
                     # TODO: RHS of comparator should also be in read[]
 
     def enter_for(self, dyn_ast: str, iid: int, next_value: Any, iterable: Iterable) -> Optional[Any]:
