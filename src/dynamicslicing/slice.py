@@ -147,6 +147,12 @@ class Slice(BaseAnalysis):
             self.datastore[location.start_line]["body"] = list(
                 range(location.start_line + 1, location.start_line + 1 + count))
         else:
+            # add the variables in the condition of the if that fails
+            for cond in self.datastore[location.start_line]["read"]:
+                x = [k for k, v in self.datastore.items() if v["write"] == cond]
+                if len(x) > 0:
+                    self.lines_to_keep.extend(x)
+
             if m.matches(node.orelse, m.Else()):
                 count = str(node.orelse).count("SimpleStatementLine")
                 if location.end_line - 1 not in self.datastore:
@@ -194,7 +200,8 @@ class Slice(BaseAnalysis):
             if line <= self.slicing_line:
                 if (not val.get("is_cond")
                         and val["write"] in self.target_variables
-                        or ("." in val["write"] and val["write"][:val["write"].index(".")] in self.target_variables)):
+                        or ("." in val["write"] and val["write"][:val["write"].index(".")] in self.target_variables)
+                        or (val["write"] == "_FN_" and len(val["read"].intersection(set(self.target_variables))) > 0)):
                     self.lines_to_keep.append(line)
                     if len(val["read"]) > 0 and len([x for x in val["read"] if x not in self.target_variables]) > 0:
                         self.target_variables.extend(val["read"])
