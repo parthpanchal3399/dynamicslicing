@@ -5,8 +5,10 @@ def slice_me():
     for i in d:
         if i < x:
             print(d[i], "is less than x")
+            d[i] = 'LESS'
         else:
             print(d[i], "is greater than x")
+            d[i] = 'GREATER'
 
     return d # slicing criterion
 

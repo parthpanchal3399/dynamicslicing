@@ -10,6 +10,7 @@ def slice_me():
         if x == 0:
             z = 0
         else:
+            x += 10
             print(x)
 
     return x # slicing criterion

@@ -24,8 +24,10 @@ def slice_me():
 
     if c1.speed > c2.speed:
         print(c1.name, "is faster")
+        c1.name += " is faster"
     else:
         print(c2.name, "is faster")
+        c2.name += " is faster"
 
     return c2  # slicing criterion
 

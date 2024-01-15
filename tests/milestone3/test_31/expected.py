@@ -9,7 +9,6 @@ def slice_me():
             else:
                 s = str(i) + ' * ' + str(j) +  ' = ' + str(i * j)
                 result.append(s)
-        print("done with iteration", i)
     return result # slicing criterion
 
 slice_me()

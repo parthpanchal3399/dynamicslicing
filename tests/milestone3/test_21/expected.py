@@ -7,9 +7,7 @@ def slice_me():
         if t=="world":
             pass
         elif t=="hello":
-            y += 3
             z += 3
-            print(z, y, x)
     return z # slicing criterion
 
 slice_me()

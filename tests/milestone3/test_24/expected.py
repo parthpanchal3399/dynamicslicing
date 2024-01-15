@@ -10,7 +10,6 @@ def slice_me():
             pass
         elif t=="hello":
             z -= 5
-            print(z)
     return z # slicing criterion
 
 slice_me()

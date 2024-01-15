@@ -4,7 +4,6 @@ def slice_me():
     t = "hello"
     if x > y and t=="hello":
         y += 2
-        print(y)
     return y # slicing criterion
 
 slice_me()

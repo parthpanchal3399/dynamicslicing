@@ -12,7 +12,6 @@ def slice_me():
                 s = str(i) + ' * ' + str(j) +  ' = ' + str(i * j)
                 result.append(s)
             second = second[1:]
-        print("done with iteration", i)
         first = first[1:]
     return result # slicing criterion
 

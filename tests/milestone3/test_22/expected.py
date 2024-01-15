@@ -6,7 +6,6 @@ def slice_me():
         pass
     elif x > z:
         z -= 5
-        print(z)
     return z # slicing criterion
 
 slice_me()

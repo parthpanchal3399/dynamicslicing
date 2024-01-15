@@ -7,12 +7,8 @@ def slice_me():
         pass
     elif x > z:
         if t=="hello":
-            y += 3
             z += 3
-            print(z, y, x)
         z -= 5
-        y += 10
-        print(z)
     return z # slicing criterion
 
 slice_me()
