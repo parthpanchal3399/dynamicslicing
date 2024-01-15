@@ -157,21 +157,35 @@ class Slice(BaseAnalysis):
                 if location.end_line - count not in self.datastore:
                     if not m.matches(node.test.left, m.Attribute()):    # to handle normal variables
                         if count > 1:
-                            self.datastore[location.end_line - count] = {"read": {node.test.left.value}, "write": '',
+                            self.datastore[location.end_line - count] = {"read": set(), "write": '',
                                                                  "is_cond": True, "body": list(range(location.end_line - count + 1, location.end_line + count - 1))}
+
                         else:
-                            self.datastore[location.end_line - count] = {"read": {node.test.left.value}, "write": '',
+                            self.datastore[location.end_line - count] = {"read": set(), "write": '',
                                                                      "is_cond": True, "body": list(
                                     range(location.end_line, location.end_line + count))}
+
+                        # add conditional variables to read
+                        for comparison in m.findall(node.test, m.Name()):
+                            self.datastore[location.end_line - count]["read"].add(comparison.value)
+                        for comparator in m.findall(node.test, m.Name()):
+                            self.datastore[location.end_line - count]["read"].add(comparator.value)
+
                     else:   # to handle objects eg p.age
                         if count > 1:
-                            self.datastore[location.end_line - count] = {"read": {node.test.left.value.value}, "write": '',
+                            self.datastore[location.end_line - count] = {"read": set(), "write": '',
                                                                  "is_cond": True, "body": list(range(location.end_line - count + 1, location.end_line + count - 1))}
+
                         else:
-                            self.datastore[location.end_line - count] = {"read": {node.test.left.value.value}, "write": '',
+                            self.datastore[location.end_line - count] = {"read": set(), "write": '',
                                                                          "is_cond": True, "body": list(
                                     range(location.end_line, location.end_line + count))}
-                    # TODO: RHS of comparator should also be in read[]
+
+                        # add conditional variables to read
+                        for comparison in m.findall(node.test, m.Attribute()):
+                            self.datastore[location.end_line - count]["read"].add(f"{comparison.value.value}.{comparison.attr.value}")
+                        for comparator in m.findall(node.test, m.ComparisonTarget(comparator=m.Attribute())):
+                            self.datastore[location.end_line - count]["read"].add(f"{comparator.comparator.value.value}.{comparator.comparator.attr.value}")
 
     def enter_for(self, dyn_ast: str, iid: int, next_value: Any, iterable: Iterable) -> Optional[Any]:
         location = self.iid_to_location(dyn_ast, iid)

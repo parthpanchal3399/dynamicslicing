@@ -69,15 +69,13 @@ class MyVisitor(CSTVisitor):
                 elif m.matches(next_parent.value, m.Attribute()):  # to handle return p.name
                     self.return_vals[1].append(next_parent.value.value.value)
                     self.return_vals[1].append(f"{next_parent.value.value.value}.{next_parent.value.attr.value}")
-                elif m.matches(next_parent.value, m.BinaryOperation()):  # to handle return x + y
-                    self.return_vals[1].append(next_parent.value.left.value)
-                    self.return_vals[1].append(next_parent.value.right.value)
+                elif m.matches(next_parent.value, m.BinaryOperation()):  # to handle return x + y + ...
+                    for var in m.findall(next_parent, m.Name()):
+                        self.return_vals[1].append(var.value)
             elif m.matches(next_parent, m.Assign()):
-                if m.matches(next_parent, m.Assign(value=m.BinaryOperation())):  # to handle x + y
-                    if m.matches(next_parent.value.left, m.Name()):
-                        self.return_vals[1].append(next_parent.value.left.value)
-                    if m.matches(next_parent.value.right, m.Name()):
-                        self.return_vals[1].append(next_parent.value.right.value)
+                if m.matches(next_parent, m.Assign(value=m.BinaryOperation())):  # to handle x + y + ...
+                    for var in m.findall(next_parent, m.Name()):
+                        self.return_vals[1].append(var.value)
                 elif m.matches(next_parent.targets[0], m.AssignTarget()):
                     if m.matches(next_parent.value, m.Name()):  # to handle result = arr; both obj will be in target
                         self.return_vals[1].append(next_parent.targets[0].target.value)
