@@ -52,7 +52,8 @@ class Slice(BaseAnalysis):
                             self.datastore[location.start_line]["write"] = node.targets[0].target.value.value
                         else:  # to handle y = 2
                             self.check_overwritten(node)  # check if value is overwritten
-                            self.datastore[location.start_line]["write"] = node.targets[0].target.value
+                            if self.datastore.get(location.start_line):
+                                self.datastore[location.start_line]["write"] = node.targets[0].target.value
                             if m.matches(node, m.Assign(value=m.Name())) and not m.matches(node, m.Assign(value=m.Call())):  # to handle obj aliases p2 = p1
                                 self.aliases[node.targets[0].target.value] = [node.value.value, location.start_line]
 
@@ -197,6 +198,24 @@ class Slice(BaseAnalysis):
                             counter_line = utils.get_location_from_node(self.code, ss)
                             self.datastore[counter_line] = {"read": set(), "write": counter}
 
+    def _continue(self, dyn_ast: str, iid: int) -> Optional[bool]:
+        location = self.iid_to_location(dyn_ast, iid)
+        node = get_node_by_location(self._get_ast(dyn_ast)[0], location)
+        # print("continue called:", location.start_line)
+        # print(node)
+        count = str(node.body).count("SimpleStatementLine")
+        self.datastore[location.start_line + count - 1] = {"read": set(), "write": '_JMP_'}
+
+
+    def _break(self, dyn_ast: str, iid: int) -> Optional[bool]:
+        location = self.iid_to_location(dyn_ast, iid)
+        node = get_node_by_location(self._get_ast(dyn_ast)[0], location)
+        # print("break called:", location.start_line)
+        # print(node)
+        count = str(node.body).count("SimpleStatementLine")
+        self.datastore[location.start_line + count - 1] = {"read": set(), "write": '_JMP_'}
+
+
     def end_execution(self) -> None:
         with open(os.path.splitext(self.source_path)[0] + '.py.orig', "r") as file:
             source = file.read()
@@ -237,7 +256,8 @@ class Slice(BaseAnalysis):
                         if self.datastore.get(body_line) and body_line <= self.slicing_line:
                             if ((self.datastore.get(body_line)["write"] in self.target_variables)
                                     or ("." in self.datastore.get(body_line)["write"] and self.datastore.get(body_line)["write"][:self.datastore.get(body_line)["write"].index(".")] in self.target_variables)
-                                    or (self.datastore.get(body_line)["write"] == "_FN_" and len(self.datastore.get(body_line)["read"].intersection(set(self.target_variables))) > 0)):
+                                    or (self.datastore.get(body_line)["write"] == "_FN_" and len(self.datastore.get(body_line)["read"].intersection(set(self.target_variables))) > 0)
+                                    or (self.datastore.get(body_line)["write"] == "_JMP_" and line in self.lines_to_keep)):
                                 self.lines_to_keep.append(body_line)
                                 self.lines_to_keep.append(line)
                                 if len(val["read"]) > 0 and len([x for x in val["read"] if x not in self.target_variables]) > 0:
