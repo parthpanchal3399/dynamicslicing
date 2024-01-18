@@ -208,7 +208,7 @@ def remove_lines(code: str, lines_to_keep: List[int]) -> str:
     wrapper = cst.metadata.MetadataWrapper(syntax_tree)
     code_modifier = RemoveLinesTransformer(lines_to_keep)
     new_syntax_tree = wrapper.visit(code_modifier)
-    print(f"Lines to Keep = {lines_to_keep} | New Code: ")
+    print(f"Lines to Keep = {set(lines_to_keep)} | New Code: ")
     print(new_syntax_tree.code)
     print("-------------------------------------------------------------")
     return new_syntax_tree.code

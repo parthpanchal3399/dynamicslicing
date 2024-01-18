@@ -288,6 +288,10 @@ class Slice(BaseAnalysis):
                                 if self.datastore.get(body_line)["write"] in list(val["read"]):
                                     self.lines_to_keep.append(body_line)
 
+                    if line not in self.lines_to_keep:   # if conditional is not to be kept, remove the definitions of variables used in the condition
+                        for cond in val["read"]:
+                            rem_locs = [k for k, v in self.datastore.items() if v["write"] == cond]
+                            self.lines_to_keep = [x for x in self.lines_to_keep if x not in rem_locs]
 
         sliced = utils.remove_lines(source, self.lines_to_keep)
         with open(os.path.dirname(self.source_path) + '/sliced.py', "w") as updated_file:
